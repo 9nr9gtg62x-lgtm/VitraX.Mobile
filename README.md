@@ -30,3 +30,9 @@ flutter run --dart-define=VX_API_BASE_URL=http://10.0.2.2:5186   # Android emula
 
 `VX_API_BASE_URL` defaults to `10.0.2.2:5186` on Android emulators and `localhost:5186`
 elsewhere; override it to point at a LAN IP for a physical device (see `lib/services/api_client.dart`).
+
+## Documentation
+
+Full project documentation (installation, user manual, testing, conclusion, references)
+covering all three VitraX projects lives in
+[`VitraX.API/DOCUMENTATION.md`](https://github.com/9nr9gtg62x-lgtm/VitraX.API/blob/master/DOCUMENTATION.md).
