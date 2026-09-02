@@ -105,12 +105,12 @@ Widget _row(String label, String value) => Padding(
     );
 
 void _showAddTaskSheet(BuildContext context) {
-  final data = context.read<DataProvider>();
   final formKey = GlobalKey<FormState>();
-  int? orderId = data.orders.isNotEmpty ? data.orders.first.orderId : null;
-  int? workerId = data.workers.isNotEmpty ? data.workers.first.workerId : null;
+  int? orderId;
+  int? workerId;
   final stageCtrl = TextEditingController();
   String status = 'قيد التنفيذ';
+  var saving = false;
 
   showModalBottomSheet(
     context: context,
@@ -118,72 +118,103 @@ void _showAddTaskSheet(BuildContext context) {
     builder: (ctx) => Directionality(
       textDirection: TextDirection.rtl,
       child: StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
-                const SizedBox(height: 16),
-                const Text('إضافة مهمة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: VxColors.primary)),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<int>(
-                  initialValue: orderId,
-                  decoration: const InputDecoration(labelText: 'أمر الإنتاج'),
-                  items: data.orders.map((o) => DropdownMenuItem(value: o.orderId, child: Text('#${o.orderId} — ${data.productName(o.productId)}'))).toList(),
-                  onChanged: (v) => setSheetState(() => orderId = v),
-                  validator: (v) => v == null ? 'اختر أمراً' : null,
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int>(
-                  initialValue: workerId,
-                  decoration: const InputDecoration(labelText: 'العامل'),
-                  items: data.workers.map((w) => DropdownMenuItem(value: w.workerId, child: Text(w.workerName))).toList(),
-                  onChanged: (v) => setSheetState(() => workerId = v),
-                  validator: (v) => v == null ? 'اختر عاملاً' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: stageCtrl,
-                  decoration: const InputDecoration(labelText: 'المرحلة'),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: status,
-                  decoration: const InputDecoration(labelText: 'الحالة'),
-                  items: const [
-                    DropdownMenuItem(value: 'قيد التنفيذ', child: Text('قيد التنفيذ')),
-                    DropdownMenuItem(value: 'مكتمل', child: Text('مكتمل')),
-                    DropdownMenuItem(value: 'متوقف', child: Text('متوقف')),
-                  ],
-                  onChanged: (v) => setSheetState(() => status = v ?? status),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: (data.orders.isEmpty || data.workers.isEmpty)
-                      ? null
-                      : () async {
-                          if (!formKey.currentState!.validate()) return;
-                          final now = DateTime.now();
-                          await context.read<DataProvider>().addTask({
-                            'orderId': orderId,
-                            'workerId': workerId,
-                            'stage': stageCtrl.text,
-                            'status': status,
-                            'startTime': now.toIso8601String(),
-                            'endTime': now.add(const Duration(hours: 4)).toIso8601String(),
-                          });
-                          if (ctx.mounted) Navigator.pop(ctx);
-                        },
-                  child: const Text('حفظ'),
-                ),
-              ],
+        builder: (ctx, setSheetState) {
+          // Watch so the dropdowns stay in sync with DataProvider.orders/workers
+          // even if they finish loading after this sheet is already open.
+          final data = ctx.watch<DataProvider>();
+          if (orderId == null && data.orders.isNotEmpty) orderId = data.orders.first.orderId;
+          if (workerId == null && data.workers.isNotEmpty) workerId = data.workers.first.workerId;
+          if (orderId != null && !data.orders.any((o) => o.orderId == orderId)) orderId = null;
+          if (workerId != null && !data.workers.any((w) => w.workerId == workerId)) workerId = null;
+
+          Future<void> submit() async {
+            if (!formKey.currentState!.validate()) return;
+            setSheetState(() => saving = true);
+            final now = DateTime.now();
+            final payload = {
+              'orderId': orderId,
+              'workerId': workerId,
+              'stage': stageCtrl.text,
+              'status': status,
+              'startTime': now.toIso8601String(),
+              'endTime': now.add(const Duration(hours: 4)).toIso8601String(),
+            };
+            debugPrint('[TasksTab] addTask request: $payload');
+            try {
+              await ctx.read<DataProvider>().addTask(payload);
+              debugPrint('[TasksTab] addTask succeeded');
+              if (ctx.mounted) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('تم حفظ المهمة بنجاح')),
+                );
+              }
+            } catch (e) {
+              debugPrint('[TasksTab] addTask failed: $e');
+              setSheetState(() => saving = false);
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                );
+              }
+            }
+          }
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 16),
+                  const Text('إضافة مهمة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: VxColors.primary)),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<int>(
+                    initialValue: orderId,
+                    decoration: const InputDecoration(labelText: 'أمر الإنتاج'),
+                    items: data.orders.map((o) => DropdownMenuItem(value: o.orderId, child: Text('#${o.orderId} — ${data.productName(o.productId)}'))).toList(),
+                    onChanged: (v) => setSheetState(() => orderId = v),
+                    validator: (v) => v == null ? 'اختر أمراً' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: workerId,
+                    decoration: const InputDecoration(labelText: 'العامل'),
+                    items: data.workers.map((w) => DropdownMenuItem(value: w.workerId, child: Text(w.workerName))).toList(),
+                    onChanged: (v) => setSheetState(() => workerId = v),
+                    validator: (v) => v == null ? 'اختر عاملاً' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: stageCtrl,
+                    decoration: const InputDecoration(labelText: 'المرحلة'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: status,
+                    decoration: const InputDecoration(labelText: 'الحالة'),
+                    items: const [
+                      DropdownMenuItem(value: 'قيد التنفيذ', child: Text('قيد التنفيذ')),
+                      DropdownMenuItem(value: 'مكتمل', child: Text('مكتمل')),
+                      DropdownMenuItem(value: 'متوقف', child: Text('متوقف')),
+                    ],
+                    onChanged: (v) => setSheetState(() => status = v ?? status),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: (saving || data.orders.isEmpty || data.workers.isEmpty) ? null : submit,
+                    child: saving
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('حفظ'),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     ),
   );

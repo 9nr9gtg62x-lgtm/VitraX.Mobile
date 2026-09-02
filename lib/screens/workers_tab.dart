@@ -117,52 +117,80 @@ void _showAddWorkerSheet(BuildContext context) {
   final roleCtrl = TextEditingController();
   final phoneCtrl = TextEditingController();
   final imageCtrl = TextEditingController();
+  var saving = false;
 
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     builder: (ctx) => Directionality(
       textDirection: TextDirection.rtl,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
-              const SizedBox(height: 16),
-              const Text('إضافة عامل', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: VxColors.primary)),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'اسم العامل'),
-                validator: (v) => (v == null || v.isEmpty) ? 'مطلوب' : null,
+      child: StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          Future<void> submit() async {
+            if (!formKey.currentState!.validate()) return;
+            setSheetState(() => saving = true);
+            final data = {
+              'workerName': nameCtrl.text,
+              'role': roleCtrl.text,
+              'phone': phoneCtrl.text,
+              'imagePath': imageCtrl.text,
+            };
+            debugPrint('[WorkersTab] addWorker request: $data');
+            try {
+              await ctx.read<DataProvider>().addWorker(data);
+              debugPrint('[WorkersTab] addWorker succeeded');
+              if (ctx.mounted) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('تم حفظ العامل بنجاح')),
+                );
+              }
+            } catch (e) {
+              debugPrint('[WorkersTab] addWorker failed: $e');
+              setSheetState(() => saving = false);
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                );
+              }
+            }
+          }
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 16),
+                  const Text('إضافة عامل', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: VxColors.primary)),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: 'اسم العامل'),
+                    validator: (v) => (v == null || v.isEmpty) ? 'مطلوب' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(controller: roleCtrl, decoration: const InputDecoration(labelText: 'الدور')),
+                  const SizedBox(height: 12),
+                  TextFormField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'الهاتف')),
+                  const SizedBox(height: 12),
+                  TextFormField(controller: imageCtrl, decoration: const InputDecoration(labelText: 'رابط الصورة (اختياري)')),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: saving ? null : submit,
+                    child: saving
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('حفظ'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              TextFormField(controller: roleCtrl, decoration: const InputDecoration(labelText: 'الدور')),
-              const SizedBox(height: 12),
-              TextFormField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'الهاتف')),
-              const SizedBox(height: 12),
-              TextFormField(controller: imageCtrl, decoration: const InputDecoration(labelText: 'رابط الصورة (اختياري)')),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () async {
-                  if (!formKey.currentState!.validate()) return;
-                  await context.read<DataProvider>().addWorker({
-                    'workerName': nameCtrl.text,
-                    'role': roleCtrl.text,
-                    'phone': phoneCtrl.text,
-                    'imagePath': imageCtrl.text,
-                  });
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: const Text('حفظ'),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     ),
   );
