@@ -1,7 +1,6 @@
-import 'dart:async' show TimeoutException;
 import 'dart:convert';
-import 'dart:io' show Platform, SocketException, HandshakeException;
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb, debugPrint;
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/auth_response.dart';
@@ -67,25 +66,16 @@ class ApiClient {
       };
 
   Future<void> login(String username, String password) async {
-    final uri = Uri.parse('$baseUrl/api/Auth/login');
-    final reqBody = jsonEncode({'username': username, 'password': password});
-    // TEMP DEBUG (remove once login is confirmed working): shows exactly
-    // what URL/body left the device and what came back, in the console/logcat.
-    if (kDebugMode) debugPrint('[ApiClient] LOGIN -> $uri body=$reqBody');
     final res = await _send(
       'POST',
       '/api/Auth/login',
-      () => http.post(uri, headers: {'Content-Type': 'application/json'}, body: reqBody),
+      () => http.post(
+        Uri.parse('$baseUrl/api/Auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username, 'password': password}),
+      ),
     );
-    if (kDebugMode) {
-      debugPrint('[ApiClient] LOGIN <- ${res.statusCode} body=${res.body}');
-    }
     if (res.statusCode != 200) {
-      // TEMP DEBUG: surface the real status/body while diagnosing; revert to
-      // the plain generic message below once login works end-to-end.
-      if (kDebugMode) {
-        throw Exception('فشل تسجيل الدخول [${res.statusCode}]: ${res.body}');
-      }
       throw Exception('اسم المستخدم أو كلمة المرور غير صحيحة');
     }
 
@@ -166,44 +156,17 @@ class ApiClient {
 
   /// Runs an HTTP call, logging the outcome (or the connection failure) to
   /// the console so a broken emulator->host connection is visible immediately.
-  /// TEMP DEBUG: classifies the common local-dev failure modes (no route to
-  /// host, TLS handshake rejected, server too slow, bad JSON) so they show up
-  /// as a distinct, readable message instead of a generic one.
   Future<http.Response> _send(
     String method,
     String path,
     Future<http.Response> Function() call,
   ) async {
     try {
-      final res = await call().timeout(const Duration(seconds: 10));
+      final res = await call();
       if (res.statusCode >= 400) {
         debugPrint('[ApiClient] $method $baseUrl$path -> ${res.statusCode}: ${res.body}');
       }
       return res;
-    } on SocketException catch (e) {
-      debugPrint('[ApiClient] $method $baseUrl$path SocketException: $e');
-      if (kDebugMode) {
-        throw Exception('تعذر الوصول إلى الخادم (SocketException): ${e.message}');
-      }
-      rethrow;
-    } on HandshakeException catch (e) {
-      debugPrint('[ApiClient] $method $baseUrl$path HandshakeException: $e');
-      if (kDebugMode) {
-        throw Exception('فشل التحقق من شهادة SSL (HandshakeException): $e');
-      }
-      rethrow;
-    } on TimeoutException catch (e) {
-      debugPrint('[ApiClient] $method $baseUrl$path TimeoutException: $e');
-      if (kDebugMode) {
-        throw Exception('انتهت مهلة الاتصال بالخادم (TimeoutException)');
-      }
-      rethrow;
-    } on FormatException catch (e) {
-      debugPrint('[ApiClient] $method $baseUrl$path FormatException: $e');
-      if (kDebugMode) {
-        throw Exception('استجابة غير صالحة من الخادم (FormatException): $e');
-      }
-      rethrow;
     } catch (e) {
       debugPrint('[ApiClient] $method $baseUrl$path failed: $e');
       rethrow;
