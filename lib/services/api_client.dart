@@ -35,8 +35,8 @@ class ApiClient {
     const override = String.fromEnvironment('VX_API_BASE_URL');
     if (override.isNotEmpty) return override;
     if (kIsWeb) return 'http://localhost:5186';
-    if (!kIsWeb && Platform.isAndroid) return 'https://10.0.2.2:7272';
-    return 'https://localhost:7272';
+    if (!kIsWeb && Platform.isAndroid) return 'https://10.0.2.2:7155';
+    return 'https://localhost:7155';
   }
 
   Future<void> loadToken() async {
